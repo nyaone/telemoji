@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"io"
 	"log"
 	"net/http"
@@ -13,6 +12,8 @@ import (
 	"regexp"
 	"telemoji/types"
 	"time"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 var (
@@ -23,7 +24,7 @@ var (
 )
 
 var (
-	packShortIDRegex = regexp.MustCompile("https://t.me/addemoji/(.+)")
+	packShortIDRegex = regexp.MustCompile("https://t.me/add(?:emoji|stickers)/(.+)")
 )
 
 func init() {
@@ -62,9 +63,11 @@ func main() {
 	log.Printf("Downloading valid packs: %v", validPacks)
 
 	// Prepare out dir
-	err := os.Mkdir(flagOutDir, 0750)
-	if err != nil {
-		log.Fatalf("Failed to prepare output directory")
+	if _, err := os.Stat(flagOutDir); os.IsNotExist(err) {
+		err = os.Mkdir(flagOutDir, 0750)
+		if err != nil {
+			log.Fatalf("Failed to prepare output directory")
+		}
 	}
 
 	// Parse config
