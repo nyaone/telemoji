@@ -25,6 +25,7 @@ var (
 
 var (
 	packShortIDRegex = regexp.MustCompile("https://t.me/add(?:emoji|stickers)/(.+)")
+	fileExtRegex     = regexp.MustCompile(`\.(.+)$`)
 )
 
 func init() {
@@ -127,33 +128,24 @@ func main() {
 			}
 
 			// Download file
-			stickerFileLink, err := bot.GetFileDirectURL(sticker.FileID)
+			file, err := bot.GetFile(tgbotapi.FileConfig{FileID: sticker.FileID})
 			if err != nil {
 				log.Printf("Failed to get file %s with error: %v", sticker.FileID, err)
 				continue
 			}
+
+			fileExt := "png" // Fallback
+
+			extExtract := fileExtRegex.FindStringSubmatch(file.FilePath)
+			if len(extExtract) > 1 {
+				fileExt = extExtract[1]
+			}
+
+			stickerFileLink := file.Link(cfg.TGBotToken)
 			res, err := (&http.Client{}).Get(stickerFileLink)
 			if err != nil {
 				log.Printf("Failed to create request %s with error: %v", stickerFileLink, err)
 				continue
-			}
-
-			// Check mimetype
-			var fileExt string
-			contentType := res.Header.Get("Content-Type")
-			switch contentType {
-			//case "image/jpeg":
-			//	fileExt = "jpg"
-			//case "image/png":
-			//	fileExt = "png"
-			//case "image/svg+xml":
-			//	fileExt = "svg"
-			//case "image/webp":
-			//	fileExt = "webp"
-			// is always application/octet-stream // TODO: auto-detect
-			default:
-				// No match, use png as fallback
-				fileExt = "png"
 			}
 
 			filename := fmt.Sprintf("%s.%s", emojiID, fileExt)
