@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"strings"
 	"telemoji/types"
 	"time"
 
@@ -42,18 +43,26 @@ func main() {
 	targetPacks := flag.Args()
 	if flagHelp || len(targetPacks) == 0 {
 		// Requires help
-		fmt.Println("Usage: telemoji [args] emojiPackLink")
+		fmt.Println("Usage: telemoji [args] emojiPackLink [outID] [emojiPackLink2 [outID2]]...")
 		flag.PrintDefaults()
 		return
 	}
 
-	var validPacks []string
-	for _, packFullLink := range targetPacks {
-		matches := packShortIDRegex.FindStringSubmatch(packFullLink)
+	var validPacks [][2]string // 0 for packID, 1 for outID
+	for _, packLinkOrID := range targetPacks {
+		matches := packShortIDRegex.FindStringSubmatch(packLinkOrID)
 		if len(matches) > 1 {
-			validPacks = append(validPacks, matches[1])
+			validPacks = append(validPacks, [2]string{matches[1], ""})
+		} else if !strings.Contains(packLinkOrID, " ") {
+			prevCur := len(validPacks) - 1
+			prevSpec := validPacks[prevCur]
+			if prevSpec[1] == "" {
+				validPacks[prevCur][1] = packLinkOrID // Change original array directly
+			} else {
+				log.Printf("Pack %s already have custom id %s, ignoring %s", prevSpec[0], prevSpec[1], packLinkOrID)
+			}
 		} else {
-			log.Printf("Invalid pack: %s", packFullLink)
+			log.Printf("Invalid pack: %s", packLinkOrID)
 		}
 	}
 	if len(validPacks) == 0 {
@@ -93,22 +102,28 @@ func main() {
 	log.Printf("Authorize on account %s", bot.Self.UserName)
 
 	// Start download pack
-	for _, packShortID := range validPacks {
+	for _, packSpec := range validPacks {
+		packID := packSpec[0] // Real id in telegram
+		outID := packSpec[1]  // Custom id for output
+		if outID == "" {      // No specify
+			outID = packID
+		}
+
 		stickerSet, err := bot.GetStickerSet(tgbotapi.GetStickerSetConfig{
-			Name: packShortID,
+			Name: packID,
 		})
 		if err != nil {
-			log.Printf("Failed to get pack %s, skip", packShortID)
+			log.Printf("Failed to get pack %s, skip", packID)
 			continue
 		}
 
 		log.Printf("Downloading pack %s...", stickerSet.Title)
 
 		// Prepare output dir
-		outDir := path.Join(flagOutDir, packShortID)
+		outDir := path.Join(flagOutDir, outID)
 		err = os.Mkdir(outDir, 0750)
 		if err != nil {
-			log.Printf("Failed to prepare directory for pack %s, skip", packShortID)
+			log.Printf("Failed to prepare directory for pack %s, skip", outID)
 			continue
 		}
 
@@ -117,7 +132,7 @@ func main() {
 
 		for i, sticker := range stickerSet.Stickers {
 			// Prepare output file
-			emojiID := fmt.Sprintf("%s_%d", packShortID, i+1)
+			emojiID := fmt.Sprintf("%s_%d", outID, i+1)
 
 			// Set meta info
 			packEmojis[i].Downloaded = false
